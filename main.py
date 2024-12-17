@@ -1,5 +1,5 @@
 from globals import *
-from method.models import GraphSAINT
+from method.models import TGCA
 from method.minibatch import Minibatch
 from utils import *
 from metric import *
@@ -62,7 +62,7 @@ def prepare(train_data,train_params,arch_gcn):
     num_classes = class_arr.shape[1]
 
     minibatch = Minibatch(adj_full_norm, adj_train, role, train_params)
-    model = GraphSAINT(num_classes, arch_gcn, train_params, feat_full, class_arr)
+    model = TGCA(num_classes, arch_gcn, train_params, feat_full, class_arr)
     printf("TOTAL NUM OF PARAMS = {}".format(sum(p.numel() for p in model.parameters())), style="yellow")
     minibatch_eval=Minibatch(adj_full_norm, adj_train, role, train_params, cpu_eval=True)
     model_eval=GraphSAINT(num_classes, arch_gcn, train_params, feat_full, class_arr, cpu_eval=True)

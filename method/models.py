@@ -37,7 +37,7 @@ def forward(x):
     return x
 
 
-class GraphSAINT(nn.Module):
+class TGCA(nn.Module):
     def __init__(self, num_classes, arch_gcn, train_params, feat_full, label_full, cpu_eval=False):
         """
         Build the multi-layer GNN architecture.
@@ -56,7 +56,7 @@ class GraphSAINT(nn.Module):
         Outputs:
             None
         """
-        super(GraphSAINT,self).__init__()
+        super(TGCA,self).__init__()
         self.vocab_size = np.max(feat_full)+1
         self.mask = np.zeros_like(feat_full)
         self.mask[feat_full==0]=1
@@ -148,9 +148,6 @@ class GraphSAINT(nn.Module):
         self.sentence_embed_norm = nn.BatchNorm1d(self.sentence_embedding_dim, eps=1e-9, track_running_stats=True)
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-5)
 
-        # new
-        # self.insert_fc = effKan(self.sentence_embedding_dim, 2)
-        # self.dims_weight[self.num_layers - 1][1]
         self.encoder = layers.Encoder(self.dims_weight[self.num_layers - 1][1], self.sentence_embedding_dim)
         self.att_struct = nn.MultiheadAttention(embed_dim=self.sentence_embedding_dim, num_heads=8, dropout=self.dropout)
         self.att_text = nn.MultiheadAttention(embed_dim=self.sentence_embedding_dim, num_heads=8,dropout=self.dropout)
@@ -159,28 +156,9 @@ class GraphSAINT(nn.Module):
         # TransGNN
         self.encoder_layer1 = nn.TransformerEncoderLayer(d_model=self.sentence_embedding_dim, nhead=1)
         self.transformer_encoder1 = nn.TransformerEncoder(self.encoder_layer1, num_layers=1)
-        self.gnns = layers.KanGNN(
-            self.dims_weight[self.num_layers - 1][1],
-            64,
-            self.dims_weight[self.num_layers - 1][1],
-            self.mulhead,
-            self.num_layers,
-            self.dropout
-        )
-        self.gnns1 = layers.KanGNN(
-            self.dims_weight[self.num_layers - 1][1],
-            64,
-            self.dims_weight[self.num_layers - 1][1],
-            self.mulhead,
-            self.num_layers,
-            self.dropout
-        )
-        # self.gnns = self.conv_layers
-        # self.kan = fft(self.dims_weight[self.num_layers - 1][1], self.dims_weight[self.num_layers - 1][1])
+
         self.encoder_layer2 = nn.TransformerEncoderLayer(d_model=self.dims_weight[self.num_layers - 1][1], nhead=2)
-        # self.encoder_layer2 = nn.TransformerEncoderLayer(d_model=self.sentence_embedding_dim, nhead=1)
         self.transformer_encoder2 = nn.TransformerEncoder(self.encoder_layer2, num_layers=1)
-        # self.lin = nn.Linear(self.sentence_embedding_dim, 128)
         self.kans = nn.Sequential(
             effKan(self.dims_weight[self.num_layers - 1][1], self.dims_weight[self.num_layers - 1][1]),
             # nn.Sigmoid(),
@@ -195,27 +173,7 @@ class GraphSAINT(nn.Module):
             self.kanClass = train_params["kanClass"] == "True"
         except:
             self.kanClass = False
-        # self.kans = KAN(
-        #     (self.sentence_embedding_dim, 192, 192, self.dims_weight[self.num_layers - 1][1])
-        # )
 
-        # self.kans1 = KAN(
-        #     (self.sentence_embedding_dim, 192, 192, 192, self.dims_weight[self.num_layers - 1][1])
-        # )
-
-        # self.cla = nn.Sequential(
-        #     effKan(self.sentence_embedding_dim + self.dims_weight[self.num_layers - 1][1], 128),
-        #     nn.ReLU(),
-        #     # nn.Sigmoid(),
-        #     effKan(128, 128),
-        #     nn.ReLU(),
-        #     # nn.Sigmoid(),
-        #     effKan(128, self.sentence_embedding_dim + self.dims_weight[self.num_layers - 1][1]),
-        #     nn.ReLU(),
-        #     # effKan(64, 32),
-        #     # effKan(32, 2),
-        #     # nn.Softmax()
-        # )
 
     def set_dims(self, dims):
         """
@@ -373,49 +331,17 @@ class GraphSAINT(nn.Module):
             pred_subg = self.classifier((None, feat_subg))[1]
         else:
             feat_subg_ = self.sentence_embed_norm(feat_subg)
-            # sims = self.cos_sim(feat_subg_, is_training)
-            # sims = self.top_sim(sims,topk=3).to(feat_subg_.device)
-            # adj_subgraph += sims
-            # adj_subgraph = adj_subgraph.to_dense()
-            # # adj_subgraph = torch.ones_like(adj_subgraph).to(adj_subgraph.device) + adj_subgraph
-            # adj_subgraph = adj_subgraph+sims*(sims>=0.85)
-            # indices = adj_subgraph.to_sparse().indices()
-            # values =  adj_subgraph.to_sparse().values()
-            # adj_subgraph = torch.sparse_coo_tensor(indices,values,size=adj_subgraph.size())
 
             feat_subg_ = self.dropout_layer(feat_subg_)
-            # sims = self.sim(feat_subg.unsqueeze(1), feat_subg.unsqueeze(0))
-
-            # new idea
-            # adj_subgraph, feat_subg_, label_subg_converted, label_subg, feat_subg \
-            #     = self.upSample(adj_subgraph, feat_subg_, label_subg_converted, label_subg, feat_subg)
-            # self.transGNN(adj_subgraph._indices(), feat_subg_)
-
-
-            # feat_subg_sample_ = self.sentence_embed_norm(feat_subg_sample)
-            # mask1 = torch.randint(0, feat_subg.shape[0], (50, )).cuda()
-            # mask2 = torch.randint(0, feat_subg.shape[0], (50, )).cuda()
-            # adj_sample1 = torch.mul(adj_subgraph.to_dense(), mask1).to(torch.int64)
-            # adj_sample2 = torch.mul(adj_subgraph.to_dense(), mask2).to(torch.int64)
-            # _, feat1 = self.conv_layers((adj_subgraph.to_dense()[adj_sample1].to_sparse(), feat_subg_[adj_sample1]))
-            # _, feat2 = self.conv_layers((adj_subgraph.to_dense()[adj_sample2].to_sparse(), feat_subg_[adj_sample2]))
             if current_epoch >= 0:
                 # TransGNN
                 trans_embed = self.transformer_encoder1(feat_subg_.unsqueeze(0)).squeeze(0)
                 _, emb_subg = self.conv_layers((adj_subgraph, trans_embed))
-                # _, emb_subg = self.gnns(emb_subg, adj_subgraph)
-                # lin = self.lin(feat_subg_)
-                # emb_subg = self.kans(trans_embed)
-                # emb_subg = self.kans1(emb_subg + feat_subg_)
                 transGNN_embed = self.transformer_encoder2(emb_subg.unsqueeze(0)).squeeze(0)
-                # _, emb_subg = self.gnns1(transGNN_embed, adj_subgraph)
 
                 # transGNN信息维度变换
                 emb_subg = self.encoder(transGNN_embed)
-                # emb_subg = self.g2((adj_subgraph, emb_subg))
-                # _, emb_subg = self.gnns(emb_subg, adj_subgraph)
 
-                # emb_subg = transGNN_embed
                 # attention再次提取结构化信息
                 att_struct, _ = self.att_struct(emb_subg.unsqueeze(0), feat_subg_.unsqueeze(0), emb_subg.unsqueeze(0))
                 # attention再次提取文本信息
@@ -425,144 +351,19 @@ class GraphSAINT(nn.Module):
                 emb_subg = self.decoder(combine)
                 emb_subg, _ = self.att(emb_subg.unsqueeze(0), emb_subg.unsqueeze(0), emb_subg.unsqueeze(0))
                 emb_subg = emb_subg.squeeze(0)
-                # emb_subg = emb_subg + feat_subg_ + att_struct.squeeze(0) + att_text.squeeze(0)
-                # emb_subg = self.decoder(emb_subg + feat_subg_)
-                # emb_subg_norm = F.normalize(emb_subg, p=2, dim=1)
 
                 if self.hidden_dim == -1:
-                    # pred_subg = self.classifier((None, emb_subg_norm))[1]
-                    # _, emb_subg_norm = self.gnns(emb_subg, adj_subgraph)
-                    # emb_subg_norm = F.normalize(emb_subg_norm, p=2, dim=1)
-                    # lin = self.lin(feat_subg_)
-                    # if self.kanClass:
-                    #     emb_subg_norm = self.kans(emb_subg)
-                    # else:
-                    #     _, emb_subg_norm = self.gnns(emb_subg, adj_subgraph)
-                    # _, emb_subg_norm = self.g2((adj_subgraph, emb_subg))
-                    pred_subg = self.classifier((None, torch.cat([emb_subg, feat_subg],dim=1)))[1]
-                    # pred_subg = self.cla(torch.cat([emb_subg_norm, feat_subg], dim=1))
-                    # pred_subg = self.classifier((None, pred_subg))[1]
-                    # _, pred_subg = self.gnns(torch.cat([emb_subg_norm, feat_subg],dim=1), adj_subgraph)
-                    # pred_subg = self.cla(torch.cat([emb_subg_norm, feat_subg], dim=1))
+                    if self.kanClass:
+                        emb_subg_norm = self.kans(emb_subg)
+                    else:
+                        _, emb_subg_norm = self.gnns(emb_subg, adj_subgraph)
+                    pred_subg = self.classifier((None, torch.cat([emb_subg_norm, feat_subg],dim=1)))[1]
                 else:
                     pred_subg = self.classifier_((None, torch.cat([emb_subg_norm, feat_subg], dim=1)))[1]
                     pred_subg = self.classifier(pred_subg)
             else:
                 pred_subg = self.classifier2((None, feat_subg))[1]
         return pred_subg, label_subg, label_subg_converted, emb_subg, None
-
-
-    def upSample(self, adj_subgraph, feat_subg_, label_subg_converted, label_subg, feat_subg):
-        new_dices = None
-        new_values = None
-        old_dices = adj_subgraph._indices()
-        for k in range(len(old_dices[0])):
-            i = old_dices[0][k]
-            j = old_dices[1][k]
-
-            if i == j:
-                continue
-            prob = nn.Softmax(dim=0)(
-                self.insert_fc(torch.cat([feat_subg_[i].unsqueeze(0), feat_subg_[j].unsqueeze(0)], dim=0)).sum(1))
-            prob = prob.argmax()
-            if prob == 1:
-                new_node_feat = (feat_subg_[i] + feat_subg_[j])
-                feat_subg = torch.cat((feat_subg, new_node_feat.unsqueeze(0)), dim=0)
-
-                new_label = (label_subg_converted[i] + label_subg_converted[j]) % 2
-                label_subg_converted = torch.cat((label_subg_converted, new_label.unsqueeze(0)), dim=0)
-                if label_subg_converted[i] + label_subg_converted[j] == 1:
-                    label_subg = torch.cat((label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-                else:
-                    label_subg = torch.cat((label_subg, torch.tensor([1, 0]).unsqueeze(0).cuda()), dim=0)
-
-                if new_dices == None:
-                    new_dices = torch.tensor([i, feat_subg_.shape[0] - 1]).unsqueeze(0).cuda()
-                    new_values = torch.tensor(1).unsqueeze(0).cuda()
-                    new_label_subg = torch.tensor([0, 1]).unsqueeze(0).cuda()
-
-                    new_dices = torch.cat(
-                        (new_dices, torch.tensor([feat_subg_.shape[0] - 1, j]).unsqueeze(0).cuda()), dim=0)
-                    new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-                    new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-                else:
-                    new_dices = torch.cat(
-                        (new_dices, torch.tensor([i, feat_subg_.shape[0] - 1]).unsqueeze(0).cuda()), dim=0)
-                    new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-                    new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-
-                    new_dices = torch.cat(
-                        (new_dices, torch.tensor([feat_subg_.shape[0] - 1, j]).unsqueeze(0).cuda()), dim=0)
-                    new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-                    new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()),
-                                               dim=0)
-            else:
-                if new_dices == None:
-                    new_dices = torch.tensor([i, j]).unsqueeze(0).cuda()
-                    new_values = torch.tensor(1).unsqueeze(0).cuda()
-                    new_label_subg = torch.tensor([1, 0]).unsqueeze(0).cuda()
-
-                else:
-                    new_dices = torch.cat((new_dices, torch.tensor([i, j]).unsqueeze(0).cuda()), dim=0)
-                    new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-                    new_label_subg = torch.cat((new_label_subg, torch.tensor([1, 0]).unsqueeze(0).cuda()),
-                                               dim=0)
-
-        # for i in adj_subgraph._indices()[0, :]:
-        #     for j in adj_subgraph._indices()[1, :]:
-        #         if i == j:
-        #             continue
-        #         prob = nn.Softmax(dim=0)(
-        #             self.insert_fc(torch.cat([feat_subg_[i].unsqueeze(0), feat_subg_[j].unsqueeze(0)], dim=0)).sum(1))
-        #         prob = prob.argmax()
-        #         if prob == 1:
-        #             new_node_feat = (feat_subg_[i] - feat_subg_[j])
-        #             feat_subg = torch.cat((feat_subg, new_node_feat.unsqueeze(0)), dim=0)
-        #
-        #             new_label = (label_subg_converted[i] + label_subg_converted[j]) % 2
-        #             label_subg_converted = torch.cat((label_subg_converted, new_label.unsqueeze(0)), dim=0)
-        #             if label_subg_converted[i] + label_subg_converted[j] == 1:
-        #                 label_subg = torch.cat((label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-        #             else:
-        #                 label_subg = torch.cat((label_subg, torch.tensor([1, 0]).unsqueeze(0).cuda()), dim=0)
-        #
-        #             if new_dices == None:
-        #                 new_dices = torch.tensor([i, feat_subg_.shape[0] - 1]).unsqueeze(0).cuda()
-        #                 new_values = torch.tensor(1).unsqueeze(0).cuda()
-        #                 new_label_subg = torch.tensor([0, 1]).unsqueeze(0).cuda()
-        #
-        #                 new_dices = torch.cat(
-        #                     (new_dices, torch.tensor([feat_subg_.shape[0] - 1, j]).unsqueeze(0).cuda()), dim=0)
-        #                 new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-        #                 new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-        #             else:
-        #                 new_dices = torch.cat(
-        #                     (new_dices, torch.tensor([i, feat_subg_.shape[0] - 1]).unsqueeze(0).cuda()), dim=0)
-        #                 new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-        #                 new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()), dim=0)
-        #
-        #                 new_dices = torch.cat(
-        #                     (new_dices, torch.tensor([feat_subg_.shape[0] - 1, j]).unsqueeze(0).cuda()), dim=0)
-        #                 new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-        #                 new_label_subg = torch.cat((new_label_subg, torch.tensor([0, 1]).unsqueeze(0).cuda()),
-        #                                            dim=0)
-        #         else:
-        #             if new_dices == None:
-        #                 new_dices = torch.tensor([i, j]).unsqueeze(0).cuda()
-        #                 new_values = torch.tensor(1).unsqueeze(0).cuda()
-        #                 new_label_subg = torch.tensor([1, 0]).unsqueeze(0).cuda()
-        #
-        #             else:
-        #                 new_dices = torch.cat((new_dices, torch.tensor([i, j]).unsqueeze(0).cuda()), dim=0)
-        #                 new_values = torch.cat((new_values, torch.tensor(1).unsqueeze(0).cuda()), dim=0)
-        #                 new_label_subg = torch.cat((new_label_subg, torch.tensor([1, 0]).unsqueeze(0).cuda()),
-        #                                            dim=0)
-
-        adj_subgraph = torch.sparse_coo_tensor(new_dices.T, new_values, size=(feat_subg.shape[0], feat_subg.shape[0]))
-        feat_subg_ = self.sentence_embed_norm(feat_subg)
-        feat_subg_ = self.dropout_layer(feat_subg_)
-
-        return adj_subgraph, feat_subg_, label_subg_converted, label_subg, feat_subg
 
     def cnn_embed(self, tokens, padding_mask=None, is_training = None):
         '''
